@@ -1,0 +1,23 @@
+.{
+    .fingerprint = 0xe967954da6f75eab,
+    .name = .kiteconnect,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.15.2",
+    .dependencies = .{
+        .websocket = .{
+            .url = "https://github.com/karlseguin/websocket.zig/archive/97fefafa59cc78ce177cff540b8685cd7f699276.tar.gz",
+            .hash = "websocket-0.1.0-ZPISdRlzAwBB_Bz2UMMqxYqF6YEVTIBoFsbzwPUJTHIc",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "tests",
+        "README.md",
+        "LICENSE",
+        "docs",
+        "justfile",
+        "flake.nix",
+    },
+}

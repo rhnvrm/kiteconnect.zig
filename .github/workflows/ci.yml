@@ -1,0 +1,88 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  ZIG_VERSION: 0.15.2
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Zig
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "${RUNNER_OS}-${RUNNER_ARCH}" in
+            Linux-X64) export TARGET="x86_64-linux" ARCHIVE_EXT="tar.xz" ;;
+            Linux-ARM64) export TARGET="aarch64-linux" ARCHIVE_EXT="tar.xz" ;;
+            macOS-X64) export TARGET="x86_64-macos" ARCHIVE_EXT="tar.xz" ;;
+            macOS-ARM64) export TARGET="aarch64-macos" ARCHIVE_EXT="tar.xz" ;;
+            Windows-X64) export TARGET="x86_64-windows" ARCHIVE_EXT="zip" ;;
+            Windows-ARM64) export TARGET="aarch64-windows" ARCHIVE_EXT="zip" ;;
+            *)
+              echo "Unsupported runner platform: ${RUNNER_OS}-${RUNNER_ARCH}" >&2
+              exit 1
+              ;;
+          esac
+
+          python - <<'PY'
+          import os
+          import pathlib
+          import tarfile
+          import urllib.request
+          import zipfile
+
+          version = os.environ["ZIG_VERSION"]
+          runner_temp = pathlib.Path(os.environ["RUNNER_TEMP"])
+          target = os.environ["TARGET"]
+          archive_ext = os.environ["ARCHIVE_EXT"]
+          archive_basename = f"zig-{target}-{version}"
+          archive_path = runner_temp / f"{archive_basename}.{archive_ext}"
+          extract_dir = runner_temp / "zig-extract"
+          url = f"https://ziglang.org/download/{version}/{archive_basename}.{archive_ext}"
+
+          extract_dir.mkdir(parents=True, exist_ok=True)
+          urllib.request.urlretrieve(url, archive_path)
+
+          if archive_ext == "zip":
+              with zipfile.ZipFile(archive_path) as zf:
+                  zf.extractall(extract_dir)
+          else:
+              with tarfile.open(archive_path, "r:xz") as tf:
+                  tf.extractall(extract_dir)
+
+          dirs = [path for path in extract_dir.iterdir() if path.is_dir()]
+          if len(dirs) != 1:
+              raise RuntimeError(f"expected exactly one extracted Zig directory, got {dirs!r}")
+
+          with open(os.environ["GITHUB_PATH"], "a", encoding="utf-8") as fh:
+              fh.write(str(dirs[0]) + os.linesep)
+          PY
+
+      - name: Check Zig version
+        shell: bash
+        run: |
+          actual="$(zig version)"
+          test "$actual" = "$ZIG_VERSION"
+
+      - name: Setup Just
+        uses: extractions/setup-just@v4
+
+      - name: Run CI checks
+        run: just ci
+
+      - name: Build docs
+        run: just docs
